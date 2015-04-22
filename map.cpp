@@ -2,9 +2,6 @@
 #include <cstdio>
 #include <string>
 
-#define MAP_SIZE 40000
-
-//http://www.exploringbinary.com/ten-ways-to-check-if-an-integer-is-a-power-of-two-in-c/
 int is_power_of_two (unsigned int x)
 {
   return ((x != 0) && !(x & (x - 1)));
@@ -96,7 +93,6 @@ class Map
     }
     
     //use Diamond-square algorithm to compote the height map
-    //http://www.playfuljs.com/realistic-terrain-in-130-lines/
     //http://en.wikipedia.org/wiki/Diamond-square_algorithm
     void compute_height(uint16_t left_top, uint16_t right_top, uint16_t left_bottom, uint16_t right_bottom, float roughness)
     {    
@@ -115,13 +111,7 @@ class Map
         for (uint32_t x = square_size / 2 ; x < size ; x = x + square_size - 1)
         {
           for (uint32_t y = square_size / 2 ; y < size ; y = y + square_size - 1)
-          {
-            //printf("\tsquare center %d;%d\n", x, y);
-            //printf("\t\tsquare left_top %d;%d\n", x - square_size / 2, y - square_size / 2);
-            //printf("\t\tsquare right_top %d;%d\n", x + square_size / 2, y - square_size / 2);
-            //printf("\t\tsquare left_bottom %d;%d\n", x - square_size / 2, y + square_size / 2);
-            //printf("\t\tsquare right_bottom %d;%d\n", x + square_size / 2, y + square_size / 2);
-            
+          {           
             //Random offset
             uint16_t offset = rand() * roughness * square_size * 2 - roughness * square_size;
             
@@ -138,12 +128,6 @@ class Map
         {
           for (uint32_t y = square_size / 2 - x % (square_size - 1) ; y < size ; y = y + square_size - 1)
           {
-            //printf("\tdiamond center %d;%d\n", x, y);
-            //printf("\t\tdiamond top %d;%d\n", x, y - square_size / 2);
-            //printf("\t\tdiamond right %d;%d\n", x + square_size / 2, y);
-            //printf("\t\tdiamond bottom %d;%d\n", x, y + square_size / 2);
-            //printf("\t\tdiamond left %d;%d\n", x - square_size / 2, y);
-            
             //Random offset
             uint16_t offset = rand() * roughness * square_size * 2 - roughness * square_size;
             
@@ -222,7 +206,7 @@ class Map
 
 int main ()
 {
-  uint32_t map_size = MAP_SIZE;
+  uint32_t map_size = 4000;
   
   srand(2344541);
   
