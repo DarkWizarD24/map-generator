@@ -1,6 +1,106 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <vector>
+
+class Color_map
+{
+  public:
+    struct Color
+    {
+      uint8_t red;
+      uint8_t green;
+      uint8_t blue;
+    };
+    
+    //! offset : 0 altitude (not 0 height)
+    //! min : lowest value in the map, use to configure the scale
+    //! max : greatest value in the map, use to configure the scale
+    Color_map (uint16_t offset = 65535 / 2, uint16_t min = 0, uint16_t max = 65535)
+    {    
+      for (uint8_t i = 0 ; i < height_negtive_colors_count ; i++)
+      {
+        Height_to_color height_to_color;
+        height_to_color.color = height_negtive_colors[i];
+        height_to_color.height_max = offset - i * ((offset - min) / height_negtive_colors_count);
+        height_to_color.height_min = offset - (i + 1) * ((offset - min) / height_negtive_colors_count) - 1;
+        height_to_colors.push_back(height_to_color);
+      }
+      
+      for (uint8_t i = 0 ; i < height_colors_count ; i++)
+      {
+        Height_to_color height_to_color;
+        height_to_color.color = height_colors[i];
+        height_to_color.height_min = offset + i * ((offset - min) / height_colors_count);
+        height_to_color.height_max = offset + (i + 1) * ((offset - min) / height_colors_count) - 1;
+        height_to_colors.push_back(height_to_color);
+      }      
+    }
+
+    Color color (uint16_t height)
+    {
+      for (auto& height_to_color : height_to_colors) 
+      {
+        if ((height >= height_to_color.height_max) && (height < height_to_color.height_min))
+        {
+          return height_to_color.color;
+        }
+      }    
+    }
+  
+  private:
+    struct Height_to_color
+    {
+      uint16_t height_min;
+      uint16_t height_max;
+      Color color;
+    };
+    
+    static const uint8_t height_colors_count = 19;
+    
+    static const uint8_t height_negtive_colors_count = 10;
+  
+    static const Color height_colors[height_colors_count];
+
+    static const Color height_negtive_colors[height_negtive_colors_count];
+    
+    std::vector<Height_to_color> height_to_colors;
+};
+
+const Color_map::Color Color_map::height_colors[19] = {
+  {245, 244 ,242},
+  {224, 222, 216},
+  {202, 195, 184},
+  {186, 174, 154},
+  {172, 154, 124},
+  {170, 135, 83 },
+  {185, 152, 90 },
+  {195, 167, 107},
+  {202, 185, 130},
+  {211, 202, 157},
+  {222, 214, 163},
+  {232, 225, 182},
+  {239, 235, 192},
+  {225, 228, 181},
+  {209, 215, 171},
+  {189, 204, 150},
+  {168, 198, 143},
+  {148, 191, 139},
+  {172, 208, 165}
+};
+
+const Color_map::Color Color_map::height_negtive_colors[10] = {
+  {216, 242, 254},
+  {198, 236, 255},
+  {185, 227, 255},
+  {172, 219, 251},
+  {161, 210, 247},
+  {150, 201, 240},
+  {141, 193, 234},
+  {132, 185, 227},
+  {121, 178, 222},
+  {113, 171, 216}
+};
 
 int is_power_of_two (unsigned int x)
 {
@@ -41,7 +141,7 @@ uint16_t average(int32_t v1, int32_t v2, int32_t v3, int32_t v4)
 
 class Map
 {
-  public :
+  public:
     Map (uint16_t map_size)
     {
       //Map size must be a power of two + 1
@@ -71,7 +171,7 @@ class Map
       delete _height;
     }
       
-    void save ()
+    void save (Color_map & color_map)
     {
       FILE * fp;
 
@@ -163,7 +263,6 @@ class Map
       }  
     }
 
-  private :
     uint16_t height_max()
     {
       uint16_t max = 0;
@@ -176,7 +275,20 @@ class Map
       }
       return max;
     }
-        
+    
+    uint16_t height_min()
+    {
+      uint16_t min = 65535;
+      for (uint32_t i = 0 ; i < size * size ; i++)
+      {
+        if (_height[i] < min)
+        {
+          min = _height[i];
+        }
+      }
+      return min;
+    }
+  private:        
     //! \return height if x and y are inside the map, -1 otherwise
     int32_t height(int32_t x, int32_t y)
     {
@@ -206,13 +318,24 @@ class Map
 
 int main ()
 {
+  //Generation parameters
+  uint32_t seed = 2344541;
   uint32_t map_size = 4000;
-  
-  srand(2344541);
+  uint32_t left_top_corner_height = 65535 * 0.1;
+  uint32_t right_top_corner_height = 65535 * 0.1;
+  uint32_t left_bottom_corner_height = 65535 * 0.5;
+  uint32_t right_bottom_corner_height = 65535 * 0.5;
+  float roughness = 0.5;
+  uint32_t ocean_height = 65535 * 0.3;
+    
+  srand(seed);
   
   Map map(map_size);
   
-  map.compute_height(65535 * 0.5, 65535 * 0.5, 65535 * 0.5, 65535 * 0.1, 0.5);
+  map.compute_height(left_top_corner_height, right_top_corner_height, left_bottom_corner_height, right_bottom_corner_height, 0.5);
+      
+  Color_map color_map;
+  //Color_map color_map(ocean_height, map.height_min(), map.height_max());
   
-  map.save();
+  map.save(color_map);
 }
