@@ -3,6 +3,13 @@
 #include <string>
 #include <vector>
 
+unsigned int randr(unsigned int min, unsigned int max)
+{
+  double scaled = (double)rand()/RAND_MAX;
+
+  return (max - min +1)*scaled + min;
+}
+
 class Color_map
 {
   public:
@@ -18,12 +25,20 @@ class Color_map
     //! max : greatest value in the map, use to configure the scale
     Color_map (uint16_t offset = 65535 / 2, uint16_t min = 0, uint16_t max = 65535)
     {    
+      printf("Computing height color map...");  
       for (uint8_t i = 0 ; i < height_negtive_colors_count ; i++)
       {
         Height_to_color height_to_color;
         height_to_color.color = height_negtive_colors[i];
-        height_to_color.height_max = offset - i * ((offset - min) / height_negtive_colors_count);
-        height_to_color.height_min = offset - (i + 1) * ((offset - min) / height_negtive_colors_count) - 1;
+        height_to_color.height_min = i * ((offset - min) / height_negtive_colors_count);
+        height_to_color.height_max = (i + 1) * ((offset - min) / height_negtive_colors_count) - 1;
+        
+        //Bound first range to min
+        if (i == 0)
+        {
+          height_to_color.height_min = min;
+        }
+        
         height_to_colors.push_back(height_to_color);
       }
       
@@ -31,21 +46,68 @@ class Color_map
       {
         Height_to_color height_to_color;
         height_to_color.color = height_colors[i];
-        height_to_color.height_min = offset + i * ((offset - min) / height_colors_count);
-        height_to_color.height_max = offset + (i + 1) * ((offset - min) / height_colors_count) - 1;
+        height_to_color.height_min = offset + i * ((max - offset) / height_colors_count);
+        height_to_color.height_max = offset + (i + 1) * ((max - offset) / height_colors_count) - 1;
+        
+        //Bound last range to max
+        if (i == height_colors_count - 1)
+        {
+          height_to_color.height_max = max;
+        }
+        
         height_to_colors.push_back(height_to_color);
       }      
+      printf("done\n");
     }
 
     Color color (uint16_t height)
     {
       for (auto& height_to_color : height_to_colors) 
       {
-        if ((height >= height_to_color.height_max) && (height < height_to_color.height_min))
+        if ((height <= height_to_color.height_max) && (height >= height_to_color.height_min))
         {
           return height_to_color.color;
         }
-      }    
+      }
+      printf("not found height = %d\n", height);
+      return Color{0, 0, 0};    
+    }
+    
+    void print ()
+    {
+      for (auto& height_to_color : height_to_colors) 
+      {
+        printf("color_map : [%d, %d] => (%d, %d, %d)\n", height_to_color.height_min, height_to_color.height_max, height_to_color.color.red, height_to_color.color.green, height_to_color.color.blue);
+      }
+    }
+    
+    void save ()
+    {
+      printf("Saving height color map...");
+    
+      uint16_t lines = 1;
+      uint16_t steps = 1000;
+    
+      FILE * fp;
+
+      fp = fopen ("height_color_map.ppm", "w");
+      fprintf(fp, "P3\n");
+      fprintf(fp, "%d %d\n", steps, lines);
+      fprintf(fp, "255\n");
+
+      for (uint32_t line = 0 ; line < lines ; line++)
+      {
+        for (uint32_t height = 0 ; height < 65535 ; height += 65535/steps)
+        {
+          Color c = color(height);
+          fprintf(fp, "%d %d %d ", c.red, c.green, c.blue);
+        }
+        fprintf(fp, "\n");
+      }
+
+      fclose(fp);
+      
+      printf("done\n");
     }
   
   private:
@@ -68,38 +130,39 @@ class Color_map
 };
 
 const Color_map::Color Color_map::height_colors[19] = {
-  {245, 244 ,242},
-  {224, 222, 216},
-  {202, 195, 184},
-  {186, 174, 154},
-  {172, 154, 124},
-  {170, 135, 83 },
-  {185, 152, 90 },
-  {195, 167, 107},
-  {202, 185, 130},
-  {211, 202, 157},
-  {222, 214, 163},
-  {232, 225, 182},
-  {239, 235, 192},
-  {225, 228, 181},
-  {209, 215, 171},
-  {189, 204, 150},
-  {168, 198, 143},
+
+  {172, 208, 165},
   {148, 191, 139},
-  {172, 208, 165}
+  {168, 198, 143},  
+  {189, 204, 150},
+  {209, 215, 171},
+  {225, 228, 181},
+  {239, 235, 192},
+  {232, 225, 182},
+  {222, 214, 163},
+  {211, 202, 157},
+  {202, 185, 130},
+  {195, 167, 107},
+  {185, 152, 90 },
+  {170, 135, 83 },
+  {172, 154, 124},
+  {186, 174, 154},
+  {202, 195, 184},
+  {224, 222, 216},
+  {245, 244 ,242}
 };
 
 const Color_map::Color Color_map::height_negtive_colors[10] = {
-  {216, 242, 254},
-  {198, 236, 255},
-  {185, 227, 255},
-  {172, 219, 251},
-  {161, 210, 247},
-  {150, 201, 240},
-  {141, 193, 234},
-  {132, 185, 227},
+  {113, 171, 216},
   {121, 178, 222},
-  {113, 171, 216}
+  {132, 185, 227},
+  {141, 193, 234},
+  {150, 201, 240},
+  {161, 210, 247},
+  {172, 219, 251},
+  {185, 227, 255},
+  {198, 236, 255},
+  {216, 242, 254}
 };
 
 int is_power_of_two (unsigned int x)
@@ -173,29 +236,39 @@ class Map
       
     void save (Color_map & color_map)
     {
+      printf("Saving map...");
+    
       FILE * fp;
 
-      fp = fopen ("height_map.pgm", "w");
-      fprintf(fp, "P2\n");
+      fp = fopen ("height_map.ppm", "w");
+      fprintf(fp, "P3\n");
       fprintf(fp, "%d %d\n", size, size);
-      fprintf(fp, "%d\n", height_max());
+      fprintf(fp, "255\n");
+
+
+      printf("\n");
 
       for (uint32_t x = 0 ; x < size ; x++)
       {
         for (uint32_t y = 0 ; y < size ; y++)
         {
-          fprintf(fp, "%d ", height(x, y));
+          Color_map::Color color = color_map.color(height(x, y));
+          fprintf(fp, "%d %d %d ", color.red, color.green, color.blue);
         }
         fprintf(fp, "\n");
       }
 
       fclose(fp);
+      
+      printf("done\n");
     }
     
     //use Diamond-square algorithm to compote the height map
     //http://en.wikipedia.org/wiki/Diamond-square_algorithm
     void compute_height(uint16_t left_top, uint16_t right_top, uint16_t left_bottom, uint16_t right_bottom, float roughness)
-    {    
+    { 
+      printf("Computing height map...");
+       
       //Set the initial corners
       height(0, 0, left_top);
       height(0, size-1, right_top);
@@ -204,16 +277,14 @@ class Map
       
       //Each step of the algorithme, the map is splitted in smaler squares
       for (uint32_t square_size = size ; square_size > 2 ; square_size =  square_size / 2 + 1)
-      {
-        printf("square_size = %d\n", square_size);
-        
+      {       
         //For each squares, compute it's center coordinates
         for (uint32_t x = square_size / 2 ; x < size ; x = x + square_size - 1)
         {
           for (uint32_t y = square_size / 2 ; y < size ; y = y + square_size - 1)
           {           
             //Random offset
-            uint16_t offset = rand() * roughness * square_size * 2 - roughness * square_size;
+            uint16_t offset = randr(- roughness * square_size, roughness * square_size);
             
             //center value equal the mean of the square corners
             height(x, y, ( height(x - square_size / 2, y - square_size / 2)
@@ -229,7 +300,7 @@ class Map
           for (uint32_t y = square_size / 2 - x % (square_size - 1) ; y < size ; y = y + square_size - 1)
           {
             //Random offset
-            uint16_t offset = rand() * roughness * square_size * 2 - roughness * square_size;
+            uint16_t offset = randr(- roughness * square_size, roughness * square_size);
             
             //center value equal the mean of the diamond corners
             int32_t top = -1;
@@ -260,7 +331,9 @@ class Map
             height(x, y, average(top, right, bottom, left) + offset);
           }
         }
-      }  
+      }
+      
+      printf("done\n");
     }
 
     uint16_t height_max()
@@ -320,22 +393,27 @@ int main ()
 {
   //Generation parameters
   uint32_t seed = 2344541;
-  uint32_t map_size = 4000;
-  uint32_t left_top_corner_height = 65535 * 0.1;
-  uint32_t right_top_corner_height = 65535 * 0.1;
-  uint32_t left_bottom_corner_height = 65535 * 0.5;
-  uint32_t right_bottom_corner_height = 65535 * 0.5;
-  float roughness = 0.5;
+  uint32_t map_size = 2048;
+  uint32_t left_top_corner_height = 65535 * 0;
+  uint32_t right_top_corner_height = 65535 * 0;
+  uint32_t left_bottom_corner_height = 65535 * 1;
+  uint32_t right_bottom_corner_height = 65535 * 1;
+  float roughness = 15;
   uint32_t ocean_height = 65535 * 0.3;
+    
+  setbuf(stdout, NULL);
     
   srand(seed);
   
   Map map(map_size);
   
-  map.compute_height(left_top_corner_height, right_top_corner_height, left_bottom_corner_height, right_bottom_corner_height, 0.5);
+  map.compute_height(left_top_corner_height, right_top_corner_height, left_bottom_corner_height, right_bottom_corner_height, roughness);
       
-  Color_map color_map;
   //Color_map color_map(ocean_height, map.height_min(), map.height_max());
+  Color_map color_map(ocean_height);
+  
+  color_map.save();
+  //color_map.print();
   
   map.save(color_map);
 }
