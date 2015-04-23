@@ -26,59 +26,83 @@ class Color_map
     Color_map (uint16_t offset = 65535 / 2, uint16_t min = 0, uint16_t max = 65535)
     {    
       printf("Computing height color map...");  
-      for (uint8_t i = 0 ; i < height_negtive_colors_count ; i++)
+      
+      colors = new Color[65535];
+      
+      for (uint16_t i = 0 ; i < sizeof(colors) ; i++)
       {
-        Height_to_color height_to_color;
-        height_to_color.color = height_negtive_colors[i];
-        height_to_color.height_min = i * ((offset - min) / height_negtive_colors_count);
-        height_to_color.height_max = (i + 1) * ((offset - min) / height_negtive_colors_count) - 1;
-        
-        //Bound first range to min
-        if (i == 0)
-        {
-          height_to_color.height_min = min;
-        }
-        
-        height_to_colors.push_back(height_to_color);
+        colors[i] = Color{0, 0, 0};
       }
       
-      for (uint8_t i = 0 ; i < height_colors_count ; i++)
-      {
-        Height_to_color height_to_color;
-        height_to_color.color = height_colors[i];
-        height_to_color.height_min = offset + i * ((max - offset) / height_colors_count);
-        height_to_color.height_max = offset + (i + 1) * ((max - offset) / height_colors_count) - 1;
-        
-        //Bound last range to max
-        if (i == height_colors_count - 1)
+      uint8_t index = 0;
+      uint16_t step = (offset - min) / height_negtive_colors_count;
+      
+      Color color_lower = height_negtive_colors[index];
+      printf("%d min, %d offset\n", min, offset);
+      for (uint16_t height = min ; height < offset ; height++)
+      {               
+        if (height > (index + 1) * step)
         {
-          height_to_color.height_max = max;
+           color_lower = height_negtive_colors[++index];
         }
         
-        height_to_colors.push_back(height_to_color);
+        Color color_greater;        
+        //when the end of the color list is reach, use the last value as greater value
+        if (index + 1 == height_negtive_colors_count)
+        {
+          color_greater = color_lower;
+        }
+        else
+        {
+          color_greater = height_negtive_colors[index + 1];
+        }
+     
+        colors[height].red = color_lower.red + double(double(color_greater.red - color_lower.red) / double(step)) * (height - index * step);
+        colors[height].green = color_lower.green + double(double(color_greater.green - color_lower.green) / double(step)) * (height - index * step);
+        colors[height].blue = color_lower.blue + double(double(color_greater.blue - color_lower.blue) / double(step)) * (height - index * step);
+      }
+      
+      index = 0;
+      step = (max - offset) / height_colors_count;
+      
+      color_lower = height_colors[index];
+      for (uint16_t height = offset ; height < max ; height++)
+      {       
+        if (height > offset + (index + 1) * step)
+        {
+          color_lower = height_colors[++index];
+        }
+        
+        Color color_greater;
+        //when the end of the color list is reach, use the last value as greater value
+        if (index + 1 == height_colors_count)
+        {
+          color_greater = color_lower;
+        }
+        else
+        {
+          color_greater = height_colors[index + 1];
+        }
+        
+        colors[height].red = color_lower.red + double(double(color_greater.red - color_lower.red) / double(step)) * (height - offset - index * step);
+        colors[height].green = color_lower.green + double(double(color_greater.green - color_lower.green) / double(step)) * (height - offset - index * step);
+        colors[height].blue = color_lower.blue + double(double(color_greater.blue - color_lower.blue) / double(step)) * (height - offset - index * step);
       }      
       printf("done\n");
     }
 
+    ~Color_map ()
+    {
+      delete colors;
+    }
+
     Color color (uint16_t height)
     {
-      for (auto& height_to_color : height_to_colors) 
+      if (colors != nullptr)
       {
-        if ((height <= height_to_color.height_max) && (height >= height_to_color.height_min))
-        {
-          return height_to_color.color;
-        }
+        return colors[height];
       }
-      printf("not found height = %d\n", height);
       return Color{0, 0, 0};    
-    }
-    
-    void print ()
-    {
-      for (auto& height_to_color : height_to_colors) 
-      {
-        printf("color_map : [%d, %d] => (%d, %d, %d)\n", height_to_color.height_min, height_to_color.height_max, height_to_color.color.red, height_to_color.color.green, height_to_color.color.blue);
-      }
     }
     
     void save ()
@@ -110,14 +134,7 @@ class Color_map
       printf("done\n");
     }
   
-  private:
-    struct Height_to_color
-    {
-      uint16_t height_min;
-      uint16_t height_max;
-      Color color;
-    };
-    
+  private:   
     static const uint8_t height_colors_count = 19;
     
     static const uint8_t height_negtive_colors_count = 10;
@@ -125,12 +142,11 @@ class Color_map
     static const Color height_colors[height_colors_count];
 
     static const Color height_negtive_colors[height_negtive_colors_count];
-    
-    std::vector<Height_to_color> height_to_colors;
+
+    Color * colors;
 };
 
 const Color_map::Color Color_map::height_colors[19] = {
-
   {172, 208, 165},
   {148, 191, 139},
   {168, 198, 143},  
