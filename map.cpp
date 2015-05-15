@@ -3,61 +3,231 @@
 #include <string>
 #include <vector>
 
-unsigned int randr(unsigned int min, unsigned int max)
-{
-  double scaled = (double)rand()/RAND_MAX;
+//---------------------------------------------------------------//
+//                             Types                             //
+//---------------------------------------------------------------//
 
-  return (max - min +1)*scaled + min;
+//! Contain a RGB color
+struct Color
+{
+  uint8_t red;
+  uint8_t green;
+  uint8_t blue;
+};
+
+//---------------------------------------------------------------//
+//                        Random numbers                         //
+//---------------------------------------------------------------//
+
+//! Provide a random number between min and max value
+uint32_t randr(uint32_t min, uint32_t max)
+{
+  double scaled = (double)rand() / RAND_MAX;
+
+  return (max - min + 1) * scaled + min;
 }
 
-static uint8_t spin = 0;
+//---------------------------------------------------------------//
+//                        Miscellaneous                          //
+//---------------------------------------------------------------//
 
-void update_spinner()
+//! Return true if the number is a power of two
+bool is_power_of_two(uint32_t x)
 {
-  switch (spin)
+  return ((x != 0) and !(x & (x - 1)));
+}
+
+//! Average between 4 unsigned values. If some of the values are negative, their are ignored.
+uint16_t average(int32_t v1, int32_t v2, int32_t v3, int32_t v4)
+{
+  uint32_t sum = 0;
+  uint8_t divisor = 0;
+
+  if (v1 >= 0)
   {
-    case 0 : printf("\b|");  spin = 1; break;
-    case 1 : printf("\b/");  spin = 2; break;
-    case 2 : printf("\b-");  spin = 3; break;
-    case 3 : printf("\b\\"); spin = 4; break;
-    case 4 : printf("\b|");  spin = 5; break;
-    case 5 : printf("\b\\"); spin = 6; break;
-    case 6 : printf("\b-");  spin = 7; break;
-    case 7 : printf("\b/");  spin = 0; break;
+    sum += v1;
+    divisor++;
   }
+
+  if (v2 >= 0)
+  {
+    sum += v2;
+    divisor++;
+  }
+
+  if (v3 >= 0)
+  {
+    sum += v3;
+    divisor++;
+  }
+
+  if (v4 >= 0)
+  {
+    sum += v4;
+    divisor++;
+  }
+
+  return sum / divisor;
 }
 
-void remove_spinner()
-{
-  printf("\b");
-}
+//---------------------------------------------------------------//
+//                            Spinner                            //
+//---------------------------------------------------------------//
 
-class Color_map
+//! Manage the spinner that can be displayed in the shell to indicated to the user that an operation is ongoing.
+class Spinner
 {
-  public:
-    struct Color
+  public :
+    //! Add the spinner to the shell
+    static void add()
     {
-      uint8_t red;
-      uint8_t green;
-      uint8_t blue;
+      printf("|");
+      spin = 1;
+    }
 
-      Color operator+ (const Color b)
+    //! Update the spinner with the next step
+    static void update()
+    {
+      switch (spin)
       {
-        Color sum;
-        sum.red = this->red + b.red;
-        sum.green = this->green + b.green;
-        sum.blue = this->blue + b.blue;
-
-        return sum;
+        case 0 : printf("\b|");  spin = 1; break;
+        case 1 : printf("\b/");  spin = 2; break;
+        case 2 : printf("\b-");  spin = 3; break;
+        case 3 : printf("\b\\"); spin = 4; break;
+        case 4 : printf("\b|");  spin = 5; break;
+        case 5 : printf("\b\\"); spin = 6; break;
+        case 6 : printf("\b-");  spin = 7; break;
+        case 7 : printf("\b/");  spin = 0; break;
       }
+    }
+
+    //! Remove the spinner from the shell
+    static void remove()
+    {
+      printf("\b");
+    }
+  private :
+    //! Use to mesmerize the spin animation state
+    static uint8_t spin;
+};
+
+uint8_t Spinner::spin = 0;
+
+//---------------------------------------------------------------//
+//                         Configuration                         //
+//---------------------------------------------------------------//
+
+//! Store the configuration of all the algorithme
+//! This class is a singleton and can be access by any part of the software on created
+//! /todo load this parameter from a json file to allow to save configurations
+class Config
+{
+  public :
+    inline static Config & get()
+    {
+      static Config singleton;
+      return singleton;
+    }
+
+    //! Used to initialize the random number generator, each seed provide an unique map
+    uint32_t seed = 2344541;
+
+    //! Size of the map in pixel (with & height)
+    uint32_t map_size = 2048;
+
+    //! Eleveation of the corners [0, 65535]
+    uint32_t left_top_corner_height = 65535 * 0;
+    uint32_t right_top_corner_height = 65535 * 0;
+    uint32_t left_bottom_corner_height = 65535 * 1;
+    uint32_t right_bottom_corner_height = 65535 * 1;
+
+    //! Heigh of the ocean [0, 65535]
+    uint32_t ocean_height = 65535 * 0.3;
+
+    //! Factor used by the level generator, the lower this value is the flatter the map is
+    float roughness = 15;
+
+    //! Maximal number of river spring to be generated
+    uint32_t spring_max = 20;
+    //! Size of the rivers
+    float rivers_size = 0.5;
+
+    //! Factor used when creating the map image, the more this factore the more the relief cast shadow and the relief appeare crispe. Has only a cosmetic effect.
+    float light_level = 75.0;
+
+    //! Number of entries in height_colors
+    uint8_t height_colors_count = 19;
+
+    //! Colors of the map above sea level
+    Color height_colors[19] = {
+      {172, 208, 165},
+      {148, 191, 139},
+      {168, 198, 143},
+      {189, 204, 150},
+      {209, 215, 171},
+      {225, 228, 181},
+      {239, 235, 192},
+      {232, 225, 182},
+      {222, 214, 163},
+      {211, 202, 157},
+      {202, 185, 130},
+      {195, 167, 107},
+      {185, 152, 90 },
+      {170, 135, 83 },
+      {172, 154, 124},
+      {186, 174, 154},
+      {202, 195, 184},
+      {224, 222, 216},
+      {245, 244 ,242}
     };
-    
-    //! offset : 0 altitude (not 0 height)
-    //! min : lowest value in the map, use to configure the scale
-    //! max : greatest value in the map, use to configure the scale
-    Color_map (uint16_t offset = 65535 / 2, uint16_t min = 0, uint16_t max = 65535)
+
+    //! Number of entries in negtive_height_colors
+    uint8_t negative_height_colors_count = 10;
+
+     //! Colors of the map under sea level
+    Color negative_height_colors[10] = {
+      {113, 171, 216},
+      {121, 178, 222},
+      {132, 185, 227},
+      {141, 193, 234},
+      {150, 201, 240},
+      {161, 210, 247},
+      {172, 219, 251},
+      {185, 227, 255},
+      {198, 236, 255},
+      {216, 242, 254}
+    };
+
+    Color river_color = {9, 120, 171};
+
+    bool generate_topographic_map = true;
+
+    bool generate_biome_map = true;
+  private:
+    Config() { }
+    Config(const Config &rhs);
+    Config &operator=(const Config &rhs);
+};
+
+//---------------------------------------------------------------//
+//                       Color Management                        //
+//---------------------------------------------------------------//
+//! Color picker is used to draw the map, it's convert an height and moisture to a color.
+class Color_picker
+{
+  public :
+    virtual Color color(uint16_t height, uint8_t moisture) const = 0;
+};
+
+//! Convert an altitude into a color, used to draw topographic maps.
+class Topographic_color_picker : public Color_picker
+{
+  public:   
+    //! /param min Minimal height of the map, use to set the deepest color
+    //! /param max Minimal height of the map, use to set the highest color
+    Topographic_color_picker (uint16_t min = 0, uint16_t max = 65535)
     {    
-      printf("Computing height color map...");  
+      printf("Computing topographic colors...");
       
       colors = new Color[65535];
       
@@ -67,26 +237,27 @@ class Color_map
       }
       
       uint8_t index = 0;
-      uint16_t step = (offset - min) / height_negtive_colors_count;
-      
-      Color color_lower = height_negtive_colors[index];
+      uint16_t offset = Config::get().ocean_height;
+      uint16_t step = (offset - min) / Config::get().negative_height_colors_count;
+
+      Color color_lower = Config::get().negative_height_colors[index];
 
       for (uint16_t height = min ; height < offset ; height++)
       {               
         if (height > (index + 1) * step)
         {
-           color_lower = height_negtive_colors[++index];
+           color_lower = Config::get().negative_height_colors[++index];
         }
         
         Color color_greater;        
         //when the end of the color list is reach, use the last value as greater value
-        if (index + 1 == height_negtive_colors_count)
+        if (index + 1 == Config::get().negative_height_colors_count)
         {
           color_greater = color_lower;
         }
         else
         {
-          color_greater = height_negtive_colors[index + 1];
+          color_greater = Config::get().negative_height_colors[index + 1];
         }
      
         colors[height].red = color_lower.red + double(double(color_greater.red - color_lower.red) / double(step)) * (height - index * step);
@@ -95,25 +266,25 @@ class Color_map
       }
       
       index = 0;
-      step = (max - offset) / height_colors_count;
+      step = (max - offset) / Config::get().height_colors_count;
       
-      color_lower = height_colors[index];
+      color_lower = Config::get().height_colors[index];
       for (uint16_t height = offset ; height < max ; height++)
       {       
         if (height > offset + (index + 1) * step)
         {
-          color_lower = height_colors[++index];
+          color_lower = Config::get().height_colors[++index];
         }
         
         Color color_greater;
         //when the end of the color list is reach, use the last value as greater value
-        if (index + 1 == height_colors_count)
+        if (index + 1 == Config::get().height_colors_count)
         {
           color_greater = color_lower;
         }
         else
         {
-          color_greater = height_colors[index + 1];
+          color_greater = Config::get().height_colors[index + 1];
         }
         
         colors[height].red = color_lower.red + double(double(color_greater.red - color_lower.red) / double(step)) * (height - offset - index * step);
@@ -123,12 +294,13 @@ class Color_map
       printf("done\n");
     }
 
-    ~Color_map ()
+    ~Topographic_color_picker()
     {
       delete colors;
     }
 
-    Color color (uint16_t height)
+    //! Topographic map is build only by using the altitude
+    Color color(uint16_t height, uint8_t /*moisture*/) const
     {
       if (colors != nullptr)
       {
@@ -136,180 +308,89 @@ class Color_map
       }
       return Color{0, 0, 0};    
     }
-    
-    void save ()
-    {
-      printf("Saving height color map...");
-    
-      uint16_t lines = 1;
-      uint16_t steps = 1000;
-    
-      FILE * fp;
-
-      fp = fopen ("height_color_map.ppm", "w");
-      fprintf(fp, "P3\n");
-      fprintf(fp, "%d %d\n", steps, lines);
-      fprintf(fp, "255\n");
-
-      for (uint32_t line = 0 ; line < lines ; line++)
-      {
-        for (uint32_t height = 0 ; height < 65535 ; height += 65535/steps)
-        {
-          Color c = color(height);
-          fprintf(fp, "%d %d %d ", c.red, c.green, c.blue);
-        }
-        fprintf(fp, "\n");
-      }
-
-      fclose(fp);
-      
-      printf("done\n");
-    }
   
   private:   
-    static const uint8_t height_colors_count = 19;
-    
-    static const uint8_t height_negtive_colors_count = 10;
-  
-    static const Color height_colors[height_colors_count];
-
-    static const Color height_negtive_colors[height_negtive_colors_count];
-
     Color * colors;
 };
 
-const Color_map::Color Color_map::height_colors[19] = {
-  {172, 208, 165},
-  {148, 191, 139},
-  {168, 198, 143},  
-  {189, 204, 150},
-  {209, 215, 171},
-  {225, 228, 181},
-  {239, 235, 192},
-  {232, 225, 182},
-  {222, 214, 163},
-  {211, 202, 157},
-  {202, 185, 130},
-  {195, 167, 107},
-  {185, 152, 90 },
-  {170, 135, 83 },
-  {172, 154, 124},
-  {186, 174, 154},
-  {202, 195, 184},
-  {224, 222, 216},
-  {245, 244 ,242}
+//! Use a whittaker diagram to provide color acording to height (temperature) and moisture
+class Biome_color_picker : public Color_picker
+{
+  Color color(uint16_t /*height*/, uint8_t /*moisture*/) const
+  {
+    //TODO
+    return Color{0, 0, 0};
+  }
 };
 
-const Color_map::Color Color_map::height_negtive_colors[10] = {
-  {113, 171, 216},
-  {121, 178, 222},
-  {132, 185, 227},
-  {141, 193, 234},
-  {150, 201, 240},
-  {161, 210, 247},
-  {172, 219, 251},
-  {185, 227, 255},
-  {198, 236, 255},
-  {216, 242, 254}
-};
-
-int is_power_of_two (unsigned int x)
-{
-  return ((x != 0) && !(x & (x - 1)));
-}
-
-uint16_t average(int32_t v1, int32_t v2, int32_t v3, int32_t v4)
-{
-  uint32_t sum = 0;
-  uint8_t divisor = 0;
-  
-  if (v1 >= 0)
-  {
-    sum += v1;
-    divisor++;
-  }
-  
-  if (v2 >= 0)
-  {
-    sum += v2;
-    divisor++;
-  }
-  
-  if (v3 >= 0)
-  {
-    sum += v3;
-    divisor++;
-  }
-  
-  if (v4 >= 0)
-  {
-    sum += v4;
-    divisor++;
-  }
-  
-  return sum / divisor;
-}
+//---------------------------------------------------------------//
+//                         Map generator                         //
+//---------------------------------------------------------------//
 
 class Map
 {
   public:
-    Map (uint16_t map_size)
+    Map()
     {
-      //Map size must be a power of two + 1
-      
-      //If not a power of two, find the nearest power of two by decrementing
-      while(not is_power_of_two(map_size))
-      {
-        map_size--;
-      }
-    
-      //The + 1
-      map_size++;
-      
-      size = map_size;
-          
-      _height = new uint16_t [size * size];
-      
-      //Set to zero the height
-      for (uint32_t i = 0 ; i < (uint32_t)(size * size) ; i++)
-      {
-        _height[i] = 0;
-      }
+      init();
+      generate_height();
+      generate_rivers();
+      generate_cities();
+      generate_road();
     }
     
-    ~Map ()
+    ~Map()
     {
       delete _height;
     }
       
-    void save (Color_map & color_map, float light_level)
+    //! Save the map to a file. Use the color picker to obtain the colors.
+    void save(const Color_picker * color_picker, std::string name)
     {
+      if (color_picker == nullptr)
+      {
+        printf("Error : Cannot save map whithout color picker\n");
+        exit(1);
+      }
+
       printf("Saving map...");
+      Spinner::add();
     
       FILE * fp;
 
-      fp = fopen ("height_map.ppm", "w");
+      fp = fopen ((name + ".ppm").c_str(), "w");
       fprintf(fp, "P3\n");
       fprintf(fp, "%d %d\n", size, size);
       fprintf(fp, "255\n");
 
       for (uint32_t x = 0 ; x < size ; x++)
       {
-        update_spinner();
+        //Update spinner only each line to improve performance
+        Spinner::update();
+
         for (uint32_t y = 0 ; y < size ; y++)
         {
-          // Get color from height of the point
-          Color_map::Color color = color_map.color(height(x, y));
+          Color color;
+          // if the pixel is water (river or lac, use dedicated color, otherwize obtain color from height)
+          if (water(x, y) != 0)
+          {
+            color = Config::get().river_color;
+          }
+          else
+          {
+            // Get color from the color picker
+            color = color_picker->color(height(x, y), moisture(x, y));
+          }
           
           //The color is altered by the relief
           int32_t west_height = height(x + 1, y);
           int32_t south_height = height(x, y + 1);
 
           //If the west or south pixel are out of the map, do not change color for this pixel
-          if ((west_height != -1) && (south_height != -1))
+          if ((west_height != -1) and (south_height != -1))
           {
             int32_t delta = west_height + south_height - 2 * height(x, y);
-            float factor = float(delta) / (65535.0 / light_level);
+            float factor = float(delta) / (65535.0 / Config::get().light_level);
 
             if (delta >= 0)
             {
@@ -319,30 +400,9 @@ class Map
             }
             else
             {
-              if (color.red + 255 * factor <= 255)
-              {
-                color.red = color.red + 255 * factor;
-              }
-              else
-              {
-                color.red = 255;
-              }
-              if (color.green + 255 * factor <= 255)
-              {
-                color.green = color.green + 255 * factor;
-              }
-              else
-              {
-                color.green = 255;
-              }
-              if (color.blue + 255 * factor <= 255)
-              {
-                color.blue = color.blue + 255 * factor;
-              }
-              else
-              {
-                color.blue = 255;
-              }
+              color.red = color.red + (factor * (255 - color.red));
+              color.green = color.green + (factor * (255 - color.green));
+              color.blue = color.blue + (factor * (255 - color.blue));
             }
           }
           
@@ -353,82 +413,7 @@ class Map
 
       fclose(fp);
       
-      remove_spinner();
-      printf("done\n");
-    }
-    
-    //use Diamond-square algorithm to compote the height map
-    //http://en.wikipedia.org/wiki/Diamond-square_algorithm
-    void compute_height(uint16_t left_top, uint16_t right_top, uint16_t left_bottom, uint16_t right_bottom, float roughness)
-    { 
-      printf("Computing height map...");
-             
-      //Set the initial corners
-      height(0, 0, left_top);
-      height(0, size-1, right_top);
-      height(size - 1, 0, left_bottom);
-      height(size - 1, size-1, right_bottom);
-      
-      //Each step of the algorithme, the map is splitted in smaler squares
-      for (int32_t square_size = size ; square_size > 2 ; square_size =  square_size / 2 + 1)
-      {      
-        update_spinner(); 
-        //For each squares, compute it's center coordinates
-        for (uint32_t x = square_size / 2 ; x < size ; x = x + square_size - 1)
-        {         
-          for (uint32_t y = square_size / 2 ; y < size ; y = y + square_size - 1)
-          {           
-            //Random offset
-            uint16_t offset = randr(- roughness * square_size, roughness * square_size);
-            
-            //center value equal the mean of the square corners
-            height(x, y, ( height(x - square_size / 2, y - square_size / 2)
-                         + height(x + square_size / 2, y - square_size / 2)
-                         + height(x - square_size / 2, y + square_size / 2)
-                         + height(x + square_size / 2, y + square_size / 2)) / 4 + offset);
-          }
-        }
-        
-        //For each diamond, compute it's center coordinates
-        for (int32_t x = 0 ; x < size ; x = x + square_size / 2)
-        {
-          for (int32_t y = square_size / 2 - x % (square_size - 1) ; y < size ; y = y + square_size - 1)
-          {
-            //Random offset
-            uint16_t offset = randr(- roughness * square_size, roughness * square_size);
-            
-            //center value equal the mean of the diamond corners
-            int32_t top = -1;
-            int32_t right = -1;
-            int32_t bottom = -1;
-            int32_t left = -1;
-            
-            if (((x >= 0) && (x < size)) && ((y - square_size / 2 >= 0) && (y - square_size / 2 < size)))
-            {
-              top = height(x, y - square_size / 2);
-            }
-            
-            if (((x + square_size / 2 >= 0) && (x + square_size / 2 < size)) && ((y >= 0) && (y < size)))
-            {
-              right = height(x + square_size / 2, y);
-            }
-            
-            if (((x >= 0) && (x < size)) && ((y + square_size / 2 >= 0) && (y + square_size / 2 < size)))
-            {
-              bottom = height(x, y + square_size / 2);
-            }
-            
-            if (((x - square_size / 2 >= 0) && (x - square_size / 2 < size)) && ((y >= 0) && (y < size)))
-            {
-              left = height(x - square_size / 2, y);
-            }
-            
-            height(x, y, average(top, right, bottom, left) + offset);
-          }
-        }
-      }
-      
-      remove_spinner();
+      Spinner::remove();
       printf("done\n");
     }
 
@@ -444,7 +429,7 @@ class Map
       }
       return max;
     }
-    
+
     uint16_t height_min()
     {
       uint16_t min = 65535;
@@ -457,7 +442,174 @@ class Map
       }
       return min;
     }
-  private:        
+
+  private:
+    struct Pixel_height
+    {
+      uint16_t x;
+      uint16_t y;
+      uint16_t height;
+    };
+
+    void init()
+    {
+      printf("Initializing map generator...");
+
+      //Map size must be a power of two + 1
+      uint16_t map_size = Config::get().map_size;
+
+      //If not a power of two, find the nearest power of two by decrementing
+      while(not is_power_of_two(map_size))
+      {
+        map_size--;
+      }
+
+      //The + 1
+      map_size++;
+
+      size = map_size;
+
+      _height = new uint16_t [size * size];
+
+      //Set to zero the height
+      for (uint32_t i = 0 ; i < (uint32_t)(size * size) ; i++)
+      {
+        _height[i] = 0;
+      }
+
+      _water = new uint8_t [size * size];
+
+      //Set to zero the water
+      for (uint32_t i = 0 ; i < (uint32_t)(size * size) ; i++)
+      {
+        _water[i] = 0;
+      }
+
+      _moisture = new uint8_t [size * size];
+
+      //Set to zero the water
+      for (uint32_t i = 0 ; i < (uint32_t)(size * size) ; i++)
+      {
+        _moisture[i] = 0;
+      }
+
+      printf("done\n");
+    }
+
+    //use Diamond-square algorithm to compote the height map
+    //http://en.wikipedia.org/wiki/Diamond-square_algorithm
+    void generate_height()
+    { 
+      printf("Computing height map...");
+      Spinner::add();
+             
+      //Set the initial corners
+      height(0, 0, Config::get().left_top_corner_height);
+      height(0, size-1, Config::get().right_top_corner_height);
+      height(size - 1, 0, Config::get().left_bottom_corner_height);
+      height(size - 1, size-1, Config::get().right_bottom_corner_height);
+      
+      //Each step of the algorithme, the map is splitted in smaler squares
+      for (int32_t square_size = size ; square_size > 2 ; square_size =  square_size / 2 + 1)
+      {      
+        Spinner::update();
+        //For each squares, compute it's center coordinates
+        for (uint32_t x = square_size / 2 ; x < size ; x = x + square_size - 1)
+        {         
+          for (uint32_t y = square_size / 2 ; y < size ; y = y + square_size - 1)
+          {           
+            //Random offset
+            uint16_t offset = randr(- Config::get().roughness * square_size, Config::get().roughness * square_size);
+            
+            //center value equal the mean of the square corners
+            height(x, y, ( height(x - square_size / 2, y - square_size / 2)
+                         + height(x + square_size / 2, y - square_size / 2)
+                         + height(x - square_size / 2, y + square_size / 2)
+                         + height(x + square_size / 2, y + square_size / 2)) / 4 + offset);
+          }
+        }
+        
+        //For each diamond, compute it's center coordinates
+        for (int32_t x = 0 ; x < size ; x = x + square_size / 2)
+        {
+          for (int32_t y = square_size / 2 - x % (square_size - 1) ; y < size ; y = y + square_size - 1)
+          {
+            //Random offset
+            uint16_t offset = randr(- Config::get().roughness * square_size, Config::get().roughness * square_size);
+            
+            //center value equal the mean of the diamond corners
+            int32_t top = -1;
+            int32_t right = -1;
+            int32_t bottom = -1;
+            int32_t left = -1;
+            
+            if (((x >= 0) and (x < size)) and ((y - square_size / 2 >= 0) and (y - square_size / 2 < size)))
+            {
+              top = height(x, y - square_size / 2);
+            }
+            
+            if (((x + square_size / 2 >= 0) and (x + square_size / 2 < size)) and ((y >= 0) and (y < size)))
+            {
+              right = height(x + square_size / 2, y);
+            }
+            
+            if (((x >= 0) and (x < size)) and ((y + square_size / 2 >= 0) and (y + square_size / 2 < size)))
+            {
+              bottom = height(x, y + square_size / 2);
+            }
+            
+            if (((x - square_size / 2 >= 0) and (x - square_size / 2 < size)) and ((y >= 0) and (y < size)))
+            {
+              left = height(x - square_size / 2, y);
+            }
+            
+            height(x, y, average(top, right, bottom, left) + offset);
+          }
+        }
+      }
+      
+      Spinner::remove();
+      printf("done\n");
+    }
+
+    void generate_rivers()
+    {
+      printf("Computing rivers...");
+      Spinner::add();
+
+      uint32_t spring_count = randr(0, Config::get().spring_max);
+
+      for (uint32_t i = 0 ; i < spring_count ; i++)
+      {
+        Spinner::update();
+
+        //Compute the coordinates of the spring
+        uint16_t x = randr(0, size);
+        uint16_t y = randr(0, size);
+
+        //If the spring is inside the ocean, skip it
+        if (height(x, y) < (int32_t)(Config::get().ocean_height))
+        {
+          continue;
+        }
+
+        //TODO std::priority_queue<RiverElement> river;
+      }
+
+      Spinner::remove();
+      printf("done\n");
+    }
+
+    void generate_cities()
+    {
+      //TODO
+    }
+
+    void generate_road()
+    {
+      //TODO
+    }
+
     //! \return height if x and y are inside the map, -1 otherwise
     int32_t height(int32_t x, int32_t y)
     {
@@ -479,50 +631,116 @@ class Map
         _height[x + size * y] = value;
       }
     }
+
+    //! \return water if x and y are inside the map, -1 otherwise
+    int16_t water(int32_t x, int32_t y)
+    {
+      if ((x < size) and (y < size) and (x >= 0) and (y >= 0))
+      {
+        return _water[x + size * y];
+      }
+      else
+      {
+        return -1;
+      }
+    }
+
+    //! Set water if x and y are inside the map
+    void water(int32_t x, int32_t y, uint8_t value)
+    {
+      if ((x < size) and (y < size) and (x >= 0) and (y >= 0))
+      {
+        _water[x + size * y] = value;
+      }
+    }
+
+    //! \return moisture if x and y are inside the map, -1 otherwise
+    int16_t moisture(int32_t x, int32_t y)
+    {
+      if ((x < size) and (y < size) and (x >= 0) and (y >= 0))
+      {
+        return _moisture[x + size * y];
+      }
+      else
+      {
+        return -1;
+      }
+    }
+
+    //! Set moisture if x and y are inside the map
+    void moisture(int32_t x, int32_t y, uint8_t value)
+    {
+      if ((x < size) and (y < size) and (x >= 0) and (y >= 0))
+      {
+        _moisture[x + size * y] = value;
+      }
+    }
+
+    void lowest_neighbors (uint16_t & x, uint16_t & y)
+    {
+      uint16_t center_x = x;
+      uint16_t center_y = y;
+
+      int32_t height_min = -1;
+
+      for (int8_t dx = -1 ; dx <= 1 ; dx++)
+      {
+        for (int8_t dy = -1 ; dy <= 1 ; dy++)
+        {
+          if ((dx != 0) and (dy != 0))
+          {
+            if (height_min == -1)
+            {
+              height_min = height(center_x + dx, center_y + dy);
+              x = center_x + dx;
+              y = center_y + dy;
+            }
+            else if ((height(center_x + dx, center_y + dy) != -1) && (height(center_x + dx, center_y + dy) < height_min))
+            {
+              height_min = height(center_x + dx, center_y + dy);
+              x = center_x + dx;
+              y = center_y + dy;
+            }
+          }
+        }
+      }
+    }
       
-    uint16_t * _height; 
-    uint16_t size;
-    
+    uint16_t * _height;  //Height of each pixel of the map
+    uint8_t * _water;  //Water power of each pixel, if not null, the pixel is river or lac (ocean is a completly different concept)
+    uint8_t * _moisture;  //Moisture of each pixel. 255 = ocean, river, lac,... 0 = desert.
+    uint16_t size;    
 };
 
+//---------------------------------------------------------------//
+//                           Main loop                           //
+//---------------------------------------------------------------//
+
 int main ()
-{
-  //Generation parameters
-
-  //Use to initialize the random number generator, each seed provide an unique map
-  uint32_t seed = 2344541;
-
-  //Size of the map in pixel (with &height)
-  uint32_t map_size = 2048;
-
-  //Eleveation of the corners [0, 65535]
-  uint32_t left_top_corner_height = 65535 * 0;
-  uint32_t right_top_corner_height = 65535 * 0;
-  uint32_t left_bottom_corner_height = 65535 * 1;
-  uint32_t right_bottom_corner_height = 65535 * 1;
-
-  //Heigh of the ocean [0, 65535]
-  uint32_t ocean_height = 65535 * 0.3;
-
-  //Factor used by the level generator, the lower this value is the smoother the map is
-  float roughness = 15;
-
-  //Factor used when creating the map image, the more this factore the more the relief cast shadow and the relief appeare crispe. Has only a cosmetic effect.
-  float light_level = 75.0;
-    
+{    
   setbuf(stdout, NULL);
     
-  srand(seed);
+  // Initialize the random number generator with the seed provided by the configuration
+  srand(Config::get().seed);
   
-  Map map(map_size);
+  // Build the map
+  Map map;
   
-  map.compute_height(left_top_corner_height, right_top_corner_height, left_bottom_corner_height, right_bottom_corner_height, roughness);
-      
-  //Color_map color_map(ocean_height, map.height_min(), map.height_max());
-  Color_map color_map(ocean_height);
-  
-  //color_map.save();
-  //color_map.print();
-  
-  map.save(color_map, light_level);
+  if (Config::get().generate_topographic_map)
+  {
+    // Generate the color picker that is used to generate the topographic map
+    Topographic_color_picker topographic_color_picker(map.height_min(), map.height_max());
+
+    // Save the topographic map
+    map.save(&topographic_color_picker, "topographic");
+  }
+/* TODO
+  if (Config::get().generate_biome_map)
+  {
+    // Generate the color picker that is used to generate the biome map
+    Biome_color_picker biome_color_picker();
+
+    // Save the topographic map
+    map.save(&biome_color_picker, std::string("biome"));
+  }*/
 }

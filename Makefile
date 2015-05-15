@@ -10,8 +10,8 @@ map: $(SRCS)
 run: height_map.ppm
 
 clean:
-	-rm *.ppm
-	-rm map
+	@-rm *.ppm
+	@-rm map
   
 all: map run
   
