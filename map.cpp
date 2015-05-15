@@ -10,6 +10,28 @@ unsigned int randr(unsigned int min, unsigned int max)
   return (max - min +1)*scaled + min;
 }
 
+static uint8_t spin = 0;
+
+void update_spinner()
+{
+  switch (spin)
+  {
+    case 0 : printf("\b|");  spin = 1; break;
+    case 1 : printf("\b/");  spin = 2; break;
+    case 2 : printf("\b-");  spin = 3; break;
+    case 3 : printf("\b\\"); spin = 4; break;
+    case 4 : printf("\b|");  spin = 5; break;
+    case 5 : printf("\b\\"); spin = 6; break;
+    case 6 : printf("\b-");  spin = 7; break;
+    case 7 : printf("\b/");  spin = 0; break;
+  }
+}
+
+void remove_spinner()
+{
+  printf("\b");
+}
+
 class Color_map
 {
   public:
@@ -18,6 +40,16 @@ class Color_map
       uint8_t red;
       uint8_t green;
       uint8_t blue;
+
+      Color operator+ (const Color b)
+      {
+        Color sum;
+        sum.red = this->red + b.red;
+        sum.green = this->green + b.green;
+        sum.blue = this->blue + b.blue;
+
+        return sum;
+      }
     };
     
     //! offset : 0 altitude (not 0 height)
@@ -38,7 +70,7 @@ class Color_map
       uint16_t step = (offset - min) / height_negtive_colors_count;
       
       Color color_lower = height_negtive_colors[index];
-      printf("%d min, %d offset\n", min, offset);
+
       for (uint16_t height = min ; height < offset ; height++)
       {               
         if (height > (index + 1) * step)
@@ -239,7 +271,7 @@ class Map
       _height = new uint16_t [size * size];
       
       //Set to zero the height
-      for (uint32_t i = 0 ; i < size * size ; i++)
+      for (uint32_t i = 0 ; i < (uint32_t)(size * size) ; i++)
       {
         _height[i] = 0;
       }
@@ -250,7 +282,7 @@ class Map
       delete _height;
     }
       
-    void save (Color_map & color_map)
+    void save (Color_map & color_map, float light_level)
     {
       printf("Saving map...");
     
@@ -261,14 +293,59 @@ class Map
       fprintf(fp, "%d %d\n", size, size);
       fprintf(fp, "255\n");
 
-
-      printf("\n");
-
       for (uint32_t x = 0 ; x < size ; x++)
       {
+        update_spinner();
         for (uint32_t y = 0 ; y < size ; y++)
         {
+          // Get color from height of the point
           Color_map::Color color = color_map.color(height(x, y));
+          
+          //The color is altered by the relief
+          int32_t west_height = height(x + 1, y);
+          int32_t south_height = height(x, y + 1);
+
+          //If the west or south pixel are out of the map, do not change color for this pixel
+          if ((west_height != -1) && (south_height != -1))
+          {
+            int32_t delta = west_height + south_height - 2 * height(x, y);
+            float factor = float(delta) / (65535.0 / light_level);
+
+            if (delta >= 0)
+            {
+              color.red = color.red * (1.0 - factor);
+              color.green = color.green * (1.0 - factor);
+              color.blue = color.blue * (1.0 - factor);
+            }
+            else
+            {
+              if (color.red + 255 * factor <= 255)
+              {
+                color.red = color.red + 255 * factor;
+              }
+              else
+              {
+                color.red = 255;
+              }
+              if (color.green + 255 * factor <= 255)
+              {
+                color.green = color.green + 255 * factor;
+              }
+              else
+              {
+                color.green = 255;
+              }
+              if (color.blue + 255 * factor <= 255)
+              {
+                color.blue = color.blue + 255 * factor;
+              }
+              else
+              {
+                color.blue = 255;
+              }
+            }
+          }
+          
           fprintf(fp, "%d %d %d ", color.red, color.green, color.blue);
         }
         fprintf(fp, "\n");
@@ -276,6 +353,7 @@ class Map
 
       fclose(fp);
       
+      remove_spinner();
       printf("done\n");
     }
     
@@ -284,7 +362,7 @@ class Map
     void compute_height(uint16_t left_top, uint16_t right_top, uint16_t left_bottom, uint16_t right_bottom, float roughness)
     { 
       printf("Computing height map...");
-       
+             
       //Set the initial corners
       height(0, 0, left_top);
       height(0, size-1, right_top);
@@ -292,11 +370,12 @@ class Map
       height(size - 1, size-1, right_bottom);
       
       //Each step of the algorithme, the map is splitted in smaler squares
-      for (uint32_t square_size = size ; square_size > 2 ; square_size =  square_size / 2 + 1)
-      {       
+      for (int32_t square_size = size ; square_size > 2 ; square_size =  square_size / 2 + 1)
+      {      
+        update_spinner(); 
         //For each squares, compute it's center coordinates
         for (uint32_t x = square_size / 2 ; x < size ; x = x + square_size - 1)
-        {
+        {         
           for (uint32_t y = square_size / 2 ; y < size ; y = y + square_size - 1)
           {           
             //Random offset
@@ -311,9 +390,9 @@ class Map
         }
         
         //For each diamond, compute it's center coordinates
-        for (uint32_t x = 0 ; x < size ; x = x + square_size / 2)
+        for (int32_t x = 0 ; x < size ; x = x + square_size / 2)
         {
-          for (uint32_t y = square_size / 2 - x % (square_size - 1) ; y < size ; y = y + square_size - 1)
+          for (int32_t y = square_size / 2 - x % (square_size - 1) ; y < size ; y = y + square_size - 1)
           {
             //Random offset
             uint16_t offset = randr(- roughness * square_size, roughness * square_size);
@@ -349,13 +428,14 @@ class Map
         }
       }
       
+      remove_spinner();
       printf("done\n");
     }
 
     uint16_t height_max()
     {
       uint16_t max = 0;
-      for (uint32_t i = 0 ; i < size * size ; i++)
+      for (uint32_t i = 0 ; i < (uint32_t)(size * size) ; i++)
       {
         if (_height[i] > max)
         {
@@ -368,7 +448,7 @@ class Map
     uint16_t height_min()
     {
       uint16_t min = 65535;
-      for (uint32_t i = 0 ; i < size * size ; i++)
+      for (uint32_t i = 0 ; i < (uint32_t)(size * size) ; i++)
       {
         if (_height[i] < min)
         {
@@ -408,14 +488,27 @@ class Map
 int main ()
 {
   //Generation parameters
+
+  //Use to initialize the random number generator, each seed provide an unique map
   uint32_t seed = 2344541;
+
+  //Size of the map in pixel (with &height)
   uint32_t map_size = 2048;
+
+  //Eleveation of the corners [0, 65535]
   uint32_t left_top_corner_height = 65535 * 0;
   uint32_t right_top_corner_height = 65535 * 0;
   uint32_t left_bottom_corner_height = 65535 * 1;
   uint32_t right_bottom_corner_height = 65535 * 1;
-  float roughness = 15;
+
+  //Heigh of the ocean [0, 65535]
   uint32_t ocean_height = 65535 * 0.3;
+
+  //Factor used by the level generator, the lower this value is the smoother the map is
+  float roughness = 15;
+
+  //Factor used when creating the map image, the more this factore the more the relief cast shadow and the relief appeare crispe. Has only a cosmetic effect.
+  float light_level = 75.0;
     
   setbuf(stdout, NULL);
     
@@ -428,8 +521,8 @@ int main ()
   //Color_map color_map(ocean_height, map.height_min(), map.height_max());
   Color_map color_map(ocean_height);
   
-  color_map.save();
+  //color_map.save();
   //color_map.print();
   
-  map.save(color_map);
+  map.save(color_map, light_level);
 }
