@@ -130,14 +130,14 @@ class Config
     }
 
     //! Used to initialize the random number generator, each seed provide an unique map
-    uint32_t seed = 2344541;
+    uint32_t seed = 2344544;
 
     //! Size of the map in pixel (with & height)
     uint32_t map_size = 2048;
 
     //! Eleveation of the corners [0, 65535]
-    uint32_t left_top_corner_height = 65535 * 0;
-    uint32_t right_top_corner_height = 65535 * 0;
+    uint32_t left_top_corner_height = 65535 * 1;
+    uint32_t right_top_corner_height = 65535 * 1;
     uint32_t left_bottom_corner_height = 65535 * 1;
     uint32_t right_bottom_corner_height = 65535 * 1;
 
@@ -145,7 +145,7 @@ class Config
     uint32_t ocean_height = 65535 * 0.3;
 
     //! Factor used by the level generator, the lower this value is the flatter the map is
-    float roughness = 15;
+    float roughness = 25;
 
     //! Maximal number of river spring to be generated
     uint32_t spring_max = 20;
@@ -203,6 +203,11 @@ class Config
     bool generate_topographic_map = true;
 
     bool generate_biome_map = true;
+
+    float smooth_factor = 0.95;
+
+    float smooth_pass = 10;
+
   private:
     Config() { }
     Config(const Config &rhs);
@@ -334,6 +339,7 @@ class Map
     {
       init();
       generate_height();
+      height_smooth();
       generate_rivers();
       generate_cities();
       generate_road();
@@ -381,7 +387,7 @@ class Map
             // Get color from the color picker
             color = color_picker->color(height(x, y), moisture(x, y));
           }
-          
+
           //The color is altered by the relief
           int32_t west_height = height(x + 1, y);
           int32_t south_height = height(x, y + 1);
@@ -391,6 +397,12 @@ class Map
           {
             int32_t delta = west_height + south_height - 2 * height(x, y);
             float factor = float(delta) / (65535.0 / Config::get().light_level);
+
+            //Reduce the light under water to obtain a better looking result.
+            if (height(x, y) < (int32_t)Config::get().ocean_height)
+            {
+              factor = factor / 3;
+            }
 
             if (delta >= 0)
             {
@@ -572,6 +584,78 @@ class Map
       printf("done\n");
     }
 
+    //! Used by height_smooth
+    void height_smooth_pixel(uint16_t current_x, uint16_t current_y, uint16_t neighbor_x, uint16_t neighbor_y)
+    {
+      int32_t current_height = height(current_x, current_y);
+      int32_t neighbor_height = height(neighbor_x, neighbor_y);
+
+      float smooth_factor = Config::get().smooth_factor;
+
+      if (neighbor_height != -1)
+      {
+        height(current_x, current_y, neighbor_height * (1.0 - smooth_factor) + current_height * smooth_factor);
+      }
+    }
+
+    //! Smooth the eight of the terrain, more pass are done on water for a more realistic result
+    //! Based on http://www.lighthouse3d.com/opengl/terrain/index.php3?smoothing
+    void height_smooth()
+    {
+      printf("Smoothing height map...");
+      Spinner::add();
+
+      for (uint8_t pass = 0 ; pass < Config::get().smooth_pass ; pass++)
+      {
+        // Rows, left to right
+        for (uint32_t x = 0 ; x < size ; x++)
+        {
+          Spinner::update();
+
+          for (uint32_t y = 0 ; y < size ; y++)
+          {
+            height_smooth_pixel(x, y, x - 1, y);
+          }
+        }
+
+        // Rows, right to left
+        for (uint32_t x = size - 1 ; x <= 0  ; x--)
+        {
+          Spinner::update();
+
+          for (uint32_t y = 0 ; y < size ; y++)
+          {
+            height_smooth_pixel(x, y, x + 1, y);
+          }
+        }
+
+        // Columns, bottom to top
+        for (uint32_t x = 0 ; x < size ; x++)
+        {
+          Spinner::update();
+
+          for (uint32_t y = 0 ; y < size ; y++)
+          {
+            height_smooth_pixel(x, y, x, y - 1);
+          }
+        }
+
+        // Columns, top to bottom
+        for (uint32_t x = 0 ; x < size ; x++)
+        {
+          Spinner::update();
+
+          for (uint32_t y = size - 1 ; y <= 0  ; y--)
+          {
+            height_smooth_pixel(x, y, x, y + 1);
+          }
+        }
+      }
+
+      Spinner::remove();
+      printf("done\n");
+    }
+
     void generate_rivers()
     {
       printf("Computing rivers...");
@@ -729,7 +813,7 @@ int main ()
   if (Config::get().generate_topographic_map)
   {
     // Generate the color picker that is used to generate the topographic map
-    Topographic_color_picker topographic_color_picker(map.height_min(), map.height_max());
+    Topographic_color_picker topographic_color_picker(0, 65535);
 
     // Save the topographic map
     map.save(&topographic_color_picker, "topographic");
